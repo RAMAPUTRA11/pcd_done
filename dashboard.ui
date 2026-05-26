@@ -1,0 +1,420 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1160</width>
+    <height>850</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Sistem Asistensi Pengemudi - Monitor Kantuk &amp; Kelelahan</string>
+  </property>
+  <property name="styleSheet">
+   <string>font-family: 'Segoe UI', Arial, sans-serif; background-color: #f3f4f6;</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <widget class="QFrame" name="mainFrame">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>20</y>
+      <width>1120</width>
+      <height>440</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>background-color: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb;</string>
+    </property>
+    
+    <widget class="QLabel" name="lblVideo">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>10</y>
+       <width>640</width>
+       <height>420</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Kamera Standby - Hubungkan Perangkat</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+     <property name="styleSheet">
+      <string>border: 2px dashed #cbd5e1; background-color: #f8fafc; color: #64748b; font-size: 14px;</string>
+     </property>
+    </widget>
+
+    <widget class="QLabel" name="lblTitleStatus">
+     <property name="geometry">
+      <rect>
+       <x>680</x>
+       <y>15</y>
+       <width>200</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>STATUS KONDISI PENGEMUDI</string>
+     </property>
+     <property name="styleSheet">
+      <string>font-weight: bold; color: #1e293b; font-size: 11px; border: none;</string>
+     </property>
+    </widget>
+
+    <widget class="QLabel" name="lblStatus">
+     <property name="geometry">
+      <rect>
+       <x>680</x>
+       <y>40</y>
+       <width>420</width>
+       <height>60</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>SISTEM SIAP</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+     <property name="styleSheet">
+      <string>color: #10b981; background-color: #f9fafb; font-size: 15px; font-weight: bold; border-radius: 6px; border: 1px solid #e5e7eb;</string>
+     </property>
+    </widget>
+
+    <widget class="QLabel" name="lblEar">
+     <property name="geometry">
+      <rect>
+       <x>680</x>
+       <y>115</y>
+       <width>420</width>
+       <height>25</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Eye Aspect Ratio (EAR) : 0.00</string>
+     </property>
+     <property name="styleSheet">
+      <string>font-size: 12px; color: #334155; padding-left: 5px; background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 4px;</string>
+     </property>
+    </widget>
+
+    <widget class="QLabel" name="lblPixelCount">
+     <property name="geometry">
+      <rect>
+       <x>680</x>
+       <y>145</y>
+       <width>420</width>
+       <height>25</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Luas Piksel Mata (PCD) : 0 px</string>
+     </property>
+     <property name="styleSheet">
+      <string>font-size: 12px; color: #334155; padding-left: 5px; background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 4px;</string>
+     </property>
+    </widget>
+
+    <widget class="QLabel" name="lblMar">
+     <property name="geometry">
+      <rect>
+       <x>680</x>
+       <y>175</y>
+       <width>420</width>
+       <height>25</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Mouth Open Ratio (MAR): 0.00</string>
+     </property>
+     <property name="styleSheet">
+      <string>font-size: 12px; color: #334155; padding-left: 5px; background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 4px;</string>
+     </property>
+    </widget>
+
+    <widget class="QLabel" name="lblMouthPixel">
+     <property name="geometry">
+      <rect>
+       <x>680</x>
+       <y>205</y>
+       <width>420</width>
+       <height>25</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>Luas Rongga Mulut(PCD): 0 px</string>
+     </property>
+     <property name="styleSheet">
+      <string>font-size: 12px; color: #334155; padding-left: 5px; background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 4px;</string>
+     </property>
+    </widget>
+
+    <widget class="QPushButton" name="btnStart">
+     <property name="geometry">
+      <rect>
+       <x>680</x>
+       <y>250</y>
+       <width>420</width>
+       <height>40</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>MULAI MONITORING</string>
+     </property>
+     <property name="styleSheet">
+      <string>background-color: #2563eb; color: white; font-weight: bold; font-size: 13px; border-radius: 6px; border: none;</string>
+     </property>
+    </widget>
+
+    <widget class="QPushButton" name="btnStop">
+     <property name="geometry">
+      <rect>
+       <x>680</x>
+       <y>305</y>
+       <width>420</width>
+       <height>40</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>HENTIKAN SISTEM</string>
+     </property>
+     <property name="styleSheet">
+      <string>background-color: #dc2626; color: white; font-weight: bold; font-size: 13px; border-radius: 6px; border: none;</string>
+     </property>
+    </widget>
+   </widget>
+
+   <widget class="QFrame" name="pcdFrame">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>480</y>
+      <width>1120</width>
+      <height>310</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>background-color: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb;</string>
+    </property>
+
+    <widget class="QLabel" name="lblPcdTitle">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>10</y>
+       <width>500</width>
+       <height>20</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>TAHAPAN PREPROCESSING CITRA DIGITAL SECARA REAL-TIME (PCD)</string>
+     </property>
+     <property name="styleSheet">
+      <string>font-weight: bold; color: #1e293b; font-size: 12px; border: none;</string>
+     </property>
+    </widget>
+
+    <widget class="QLabel" name="lblRoiOriginal">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>45</y>
+       <width>200</width>
+       <height>120</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string>border: 1px solid #cbd5e1; background-color: #f8fafc; border-radius: 6px;</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="descPcd1">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>175</y>
+       <width>200</width>
+       <height>120</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>&lt;b&gt;1. ROI Mata Kanan&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#64748b;&quot;&gt;Ekstraksi 6 titik koordinat landmark mata kanan dari MediaPipe + penambahan Padding luasan 10 piksel.&lt;/span&gt;</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignHCenter|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="styleSheet">
+      <string>border: none; font-size: 11px;</string>
+     </property>
+    </widget>
+
+    <widget class="QLabel" name="lblRoiLeftOriginal">
+     <property name="geometry">
+      <rect>
+       <x>240</x>
+       <y>45</y>
+       <width>200</width>
+       <height>120</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string>border: 1px solid #cbd5e1; background-color: #f8fafc; border-radius: 6px;</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="descPcd2">
+     <property name="geometry">
+      <rect>
+       <x>240</x>
+       <y>175</y>
+       <width>200</width>
+       <height>120</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>&lt;b&gt;2. ROI Mata Kiri&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#64748b;&quot;&gt;Ekstraksi 6 titik koordinat landmark mata kiri dari MediaPipe + penambahan Padding luasan 10 piksel.&lt;/span&gt;</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignHCenter|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="styleSheet">
+      <string>border: none; font-size: 11px;</string>
+     </property>
+    </widget>
+
+    <widget class="QLabel" name="lblRoiBinary">
+     <property name="geometry">
+      <rect>
+       <x>460</x>
+       <y>45</y>
+       <width>200</width>
+       <height>120</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string>border: 1px solid #cbd5e1; background-color: #f8fafc; border-radius: 6px;</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="descPcd3">
+     <property name="geometry">
+      <rect>
+       <x>460</x>
+       <y>175</y>
+       <width>200</width>
+       <height>120</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>&lt;b&gt;3. Binerisasi Otsu Mata&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#64748b;&quot;&gt;Konversi Grayscale, Gaussian Blur (3x3), lalu Segmentasi Otsu Threshold secara Inverted (Piksel gelap dibalik jadi Putih).&lt;/span&gt;</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignHCenter|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="styleSheet">
+      <string>border: none; font-size: 11px;</string>
+     </property>
+    </widget>
+
+    <widget class="QLabel" name="lblRoiMouthOrig">
+     <property name="geometry">
+      <rect>
+       <x>680</x>
+       <y>45</y>
+       <width>200</width>
+       <height>120</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string>border: 1px solid #cbd5e1; background-color: #f8fafc; border-radius: 6px;</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="descPcd4">
+     <property name="geometry">
+      <rect>
+       <x>680</x>
+       <y>175</y>
+       <width>200</width>
+       <height>120</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>&lt;b&gt;4. ROI Mulut&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#64748b;&quot;&gt;Ekstraksi 8 landmark bibir luar-dalam + penambahan Padding luasan 12 piksel untuk mengantisipasi mulut menguap lebar.&lt;/span&gt;</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignHCenter|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="styleSheet">
+      <string>border: none; font-size: 11px;</string>
+     </property>
+    </widget>
+
+    <widget class="QLabel" name="lblRoiMouthBin">
+     <property name="geometry">
+      <rect>
+       <x>900</x>
+       <y>45</y>
+       <width>200</width>
+       <height>120</height>
+      </rect>
+     </property>
+     <property name="styleSheet">
+      <string>border: 1px solid #cbd5e1; background-color: #f8fafc; border-radius: 6px;</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+    <widget class="QLabel" name="descPcd5">
+     <property name="geometry">
+      <rect>
+       <x>900</x>
+       <y>175</y>
+       <width>200</width>
+       <height>120</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>&lt;b&gt;5. Morfologi Mulut&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#64748b;&quot;&gt;Otsu Thresholding dilanjutkan Operasi Morfologi Closing (Kernel 3x3) untuk menghilangkan noise lubang di dalam rongga mulut.&lt;/span&gt;</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignHCenter|Qt::AlignTop</set>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+     <property name="styleSheet">
+      <string>border: none; font-size: 11px;</string>
+     </property>
+    </widget>
+   </widget>
+  </widget>
+ </widget>
+</ui>
