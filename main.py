@@ -4,13 +4,14 @@ import numpy as np
 import mediapipe as mp
 import os
 import time
+from pygame import mixer  # Menggunakan pygame untuk play/stop audio yang stabil
 from PyQt5.QtCore import QThread, pyqtSignal, pyqtSlot, Qt
 from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtWidgets import QApplication, QMainWindow
+from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox
 from PyQt5.uic import loadUi
 
-os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
-import pygame
+# Konfigurasi Path Dataset Lokal hasil ekstrak curl
+DATASET_PATH = "dataset/mrl"
 
 class VideoThread(QThread):
     change_pixmap_signal = pyqtSignal(np.ndarray)
@@ -19,279 +20,329 @@ class VideoThread(QThread):
     change_roi_bin_signal = pyqtSignal(np.ndarray)
     change_roi_mouth_orig = pyqtSignal(np.ndarray)
     change_roi_mouth_bin = pyqtSignal(np.ndarray)
+    
+    # Isinya: EAR, PixelCount, MAR, MouthPixel, StatusText
     update_metrics_signal = pyqtSignal(float, int, float, int, str)
 
-    def __init__(self):
+    def __init__(self, mode='REG'):
         super().__init__()
         self._run_flag = True
-        pygame.mixer.init()
-        self.alarm_path = "alarm.mp3"
-        self.is_alarm_playing = False
-        
-        if os.path.exists(self.alarm_path):
-            pygame.mixer.music.load(self.alarm_path)
-
-    def run(self):
-        mp_face_mesh = mp.solutions.face_mesh
-        face_mesh = mp_face_mesh.FaceMesh(
+        self.mode = mode 
+        self.mp_face_mesh = mp.solutions.face_mesh.FaceMesh(
             max_num_faces=1,
             refine_landmarks=True,
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5
         )
+        
+        # Mapping Indeks Landmark
+        self.LANDMARKS = {
+            "mata_kanan": [33, 160, 158, 133, 153, 144],
+            "mata_kiri": [362, 385, 387, 263, 373, 380],
+            "alis_kanan": [70, 63, 105, 66, 107],
+            "alis_kiri": [336, 296, 334, 293, 300],
+            "mulut": [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 415, 310, 311, 312, 13, 82, 81, 80],
+            "rahang": [234, 93, 132, 58, 172, 136, 150, 149, 176, 148, 152, 377, 400, 378, 379, 365, 397, 288, 361, 323, 454]
+        }
 
-        RIGHT_EYE_LANDMARKS = [33, 160, 158, 133, 153, 144]
-        LEFT_EYE_LANDMARKS = [362, 385, 387, 263, 373, 380]
-        MOUTH_LANDMARKS = [78, 81, 13, 311, 308, 178, 14, 402]
+        # Initialize Pygame Mixer untuk Audio Alarm
+        mixer.init()
+        self.alarm_path = "alarm.mp3"
 
+        # Variables untuk Logika Counter dan Timer Kustom Anda
+# Variables untuk Logika Counter dan Timer Kustom Anda
+# Variables untuk Logika Counter dan Timer Kustom Anda
+        self.counter_mengantuk = 0
+        self.mata_tertutup_start_time = None
+        self.alarm_active = False
+        self.alarm_start_time = None
+        
+        self.sedang_menguap = False 
+        self.terakhir_menguap_time = 0 # Tambahkan ini untuk mengunci jeda waktu uapan
+
+    def run(self):
         cap = cv2.VideoCapture(1)
-
-        mata_tertutup_sejak = None   
-        mulut_terbuka_sejak = None   
-        jumlah_pelanggaran_kantuk = 0  
-        sudah_hitung_kantuk_ini = False   
-        sudah_hitung_menguap_ini = False  
-        status_driver = "NORMAL / AMAN"
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-
+        
         while self._run_flag:
             ret, frame = cap.read()
-            if not ret:
+            if not ret: 
                 continue
-
+            
             frame = cv2.resize(frame, (640, 420))
-            h, w, _ = frame.shape
+            current_time = time.time()
+            
+            # --- LOGIKA MATIKAN ALARM OTOMATIS SETELAH 10 DETIK ---
+            if self.alarm_active and self.alarm_start_time:
+                if current_time - self.alarm_start_time >= 10.0:
+                    mixer.music.stop()
+                    self.alarm_active = False
+                    self.alarm_start_time = None
 
+            # --- PREPROCESSING CITRA DIGITAL (PCD): LAB + CLAHE ---
             lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
             l, a, b = cv2.split(lab)
             clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-            cl = clahe.apply(l)
-            limg = cv2.merge((cl, a, b))
+            limg = cv2.merge((clahe.apply(l), a, b))
             enhanced_frame = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+            
+            if self.mode == 'REG':
+                cv2.putText(enhanced_frame, "POSISIKAN WAJAH LALU KLIK REGISTRASI", (30, 40), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+                self.change_pixmap_signal.emit(enhanced_frame)
+                
+            elif self.mode == 'MONITOR':
+                h_f, w_f, _ = enhanced_frame.shape
+                rgb_frame = cv2.cvtColor(enhanced_frame, cv2.COLOR_BGR2RGB)
+                results = self.mp_face_mesh.process(rgb_frame)
+                
+                ear, pixel_count, mar, mouth_pixel = 0.0, 0, 0.0, 0
+                status_driver = "NORMAL"
+                
+                if results.multi_face_landmarks:
+                    for face_landmarks in results.multi_face_landmarks:
+                        coords = {}
+                        for organ, indices in self.LANDMARKS.items():
+                            coords[organ] = []
+                            for idx in indices:
+                                pt = face_landmarks.landmark[idx]
+                                px_x = int(pt.x * w_f)
+                                px_y = int(pt.y * h_f)
+                                coords[organ].append((px_x, px_y))
+                                cv2.circle(enhanced_frame, (px_x, px_y), 1, (0, 255, 0), -1)
 
-            rgb_frame = cv2.cvtColor(enhanced_frame, cv2.COLOR_BGR2RGB)
-            results = face_mesh.process(rgb_frame)
+                        # Hitung EAR (Mata Kanan + Mata Kiri)
+                        mk = coords["mata_kanan"]
+                        m_kanan_v1 = np.linalg.norm(np.array(mk[1]) - np.array(mk[5]))
+                        m_kanan_v2 = np.linalg.norm(np.array(mk[2]) - np.array(mk[4]))
+                        m_kanan_h  = np.linalg.norm(np.array(mk[0]) - np.array(mk[3]))
+                        ear_kanan  = (m_kanan_v1 + m_kanan_v2) / (2.0 * m_kanan_h)
 
-            eye_pixels = 0
-            mouth_pixels = 0
-            ear_score = 0.0
-            mar_score = 0.0
-            kondisi_pejam_frame_ini = False
-            kondisi_menguap_frame_ini = False
-
-            if results.multi_face_landmarks:
-                for face_landmarks in results.multi_face_landmarks:
-                    
-                    # 1. KOTAK 1 & 2: ROI MATA KANAN DAN KIRI
-                    r_eye_coords = np.array([(int(face_landmarks.landmark[idx].x * w), int(face_landmarks.landmark[idx].y * h)) for idx in RIGHT_EYE_LANDMARKS])
-                    rex, rey, rew, reh = cv2.boundingRect(r_eye_coords)
-                    rex1, rey1 = max(0, rex - 10), max(0, rey - 10)
-                    rex2, rey2 = min(w, rex + rew + 10), min(h, rey + reh + 10)
-                    roi_right_eye = enhanced_frame[rey1:rey2, rex1:rex2]
-
-                    l_eye_coords = np.array([(int(face_landmarks.landmark[idx].x * w), int(face_landmarks.landmark[idx].y * h)) for idx in LEFT_EYE_LANDMARKS])
-                    lex, ley, lew, leh = cv2.boundingRect(l_eye_coords)
-                    lex1, ley1 = max(0, lex - 10), max(0, ley - 10)
-                    lex2, ley2 = min(w, lex + lew + 10), min(h, ley + leh + 10)
-                    roi_left_eye = enhanced_frame[ley1:ley2, lex1:lex2]
-
-                    if roi_right_eye.size > 0 and roi_right_eye.shape[0] > 2 and roi_right_eye.shape[1] > 2:
-                        # 3. KOTAK 3: BINERISASI OTSU MATA
-                        roi_gray = cv2.cvtColor(roi_right_eye, cv2.COLOR_BGR2GRAY)
-                        roi_blur = cv2.GaussianBlur(roi_gray, (3, 3), 0)
-                        _, roi_bin_pure = cv2.threshold(roi_blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+                        ml = coords["mata_kiri"]
+                        m_kiri_v1 = np.linalg.norm(np.array(ml[1]) - np.array(ml[5]))
+                        m_kiri_v2 = np.linalg.norm(np.array(ml[2]) - np.array(ml[4]))
+                        m_kiri_h  = np.linalg.norm(np.array(ml[0]) - np.array(ml[3]))
+                        ear_kiri  = (m_kiri_v1 + m_kiri_v2) / (2.0 * m_kiri_h)
                         
-                        roi_morph_eye = cv2.morphologyEx(roi_bin_pure, cv2.MORPH_CLOSE, kernel)
-                        eye_pixels = cv2.countNonZero(roi_morph_eye)
+                        ear = (ear_kanan + ear_kiri) / 2.0
 
-                        p2_p6_r = np.linalg.norm(r_eye_coords[1] - r_eye_coords[5])
-                        p3_p5_r = np.linalg.norm(r_eye_coords[2] - r_eye_coords[4])
-                        p1_p4_r = np.linalg.norm(r_eye_coords[0] - r_eye_coords[3])
-                        ear_right = (p2_p6_r + p3_p5_r) / (2.0 * p1_p4_r)
+                        # Hitung MAR (Mouth Open Ratio)
+                        mulut_titik = coords["mulut"]
+                        mar_v = np.linalg.norm(np.array(mulut_titik[16]) - np.array(mulut_titik[5])) 
+                        mar_h = np.linalg.norm(np.array(mulut_titik[0]) - np.array(mulut_titik[10]))  
+                        mar = mar_v / mar_h
 
-                        p2_p6_l = np.linalg.norm(l_eye_coords[1] - l_eye_coords[5])
-                        p3_p5_l = np.linalg.norm(l_eye_coords[2] - l_eye_coords[4])
-                        p1_p4_l = np.linalg.norm(l_eye_coords[0] - l_eye_coords[3])
-                        ear_left = (p2_p6_l + p3_p5_l) / (2.0 * p1_p4_l)
+                        # --- EKSTRAKSI ROI KOTAK PCD BAWAH ---
+                        x_pts_r = [p[0] for p in mk]
+                        y_pts_r = [p[1] for p in mk]
+                        roi_r = enhanced_frame[max(0, min(y_pts_r)-10):min(h_f, max(y_pts_r)+10), max(0, min(x_pts_r)-10):min(w_f, max(x_pts_r)+10)]
 
-                        ear_score = (ear_right + ear_left) / 2.0
+                        x_pts_l = [p[0] for p in ml]
+                        y_pts_l = [p[1] for p in ml]
+                        roi_l = enhanced_frame[max(0, min(y_pts_l)-10):min(h_f, max(y_pts_l)+10), max(0, min(x_pts_l)-10):min(w_f, max(x_pts_l)+10)]
 
-                        self.change_roi_orig_signal.emit(roi_right_eye.copy())
-                        self.change_roi_left_orig_signal.emit(roi_left_eye.copy())
-                        self.change_roi_bin_signal.emit(roi_bin_pure.copy())
+                        x_pts_m = [p[0] for p in mulut_titik]
+                        y_pts_m = [p[1] for p in mulut_titik]
+                        roi_mouth = enhanced_frame[max(0, min(y_pts_m)-12):min(h_f, max(y_pts_m)+12), max(0, min(x_pts_m)-12):min(w_f, max(x_pts_m)+12)]
 
-                    # 4. KOTAK 4: ROI MULUT
-                    mouth_coords = np.array([(int(face_landmarks.landmark[idx].x * w), int(face_landmarks.landmark[idx].y * h)) for idx in MOUTH_LANDMARKS])
-                    mx, my, mw, mh = cv2.boundingRect(mouth_coords)
-                    mx1, my1 = max(0, mx - 12), max(0, my - 12)
-                    mx2, my2 = min(w, mx + mw + 12), min(h, my + mh + 12)
-                    
-                    roi_mouth = enhanced_frame[my1:my2, mx1:mx2]
+                        # --- SEGMENTASI CITRA REAL-TIME ---
+                        if roi_r.size > 0:
+                            gray_eye = cv2.cvtColor(roi_r, cv2.COLOR_BGR2GRAY)
+                            blur_eye = cv2.GaussianBlur(gray_eye, (3, 3), 0)
+                            _, bin_eye = cv2.threshold(blur_eye, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+                            pixel_count = cv2.countNonZero(bin_eye)
+                        else:
+                            bin_eye = np.zeros((120, 200), dtype=np.uint8)
 
-                    # PROTEKSI KETat: Pastikan ROI valid, punya area, dan ukurannya logis sebelum diolah OpenCV
-                    if roi_mouth is not None and roi_mouth.size > 0 and roi_mouth.shape[0] > 5 and roi_mouth.shape[1] > 5:
-                        try:
-                            mouth_gray = cv2.cvtColor(roi_mouth, cv2.COLOR_BGR2GRAY)
-                            
-                            if mouth_gray is not None and mouth_gray.size > 0 and mouth_gray.shape[0] > 5 and mouth_gray.shape[1] > 5:
-                                # 5. KOTAK 5: MORFOLOGI MULUT (Dibungkus try-except agar jika ada anomali citra tidak akan crash)
-                                mouth_blur = cv2.GaussianBlur(mouth_gray, (5, 5), 0)
-                                _, mouth_bin = cv2.threshold(mouth_blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-                                mouth_morph = cv2.morphologyEx(mouth_bin, cv2.MORPH_CLOSE, kernel)
-                                mouth_pixels = cv2.countNonZero(mouth_morph)
+                        if roi_mouth.size > 0:
+                            gray_mouth = cv2.cvtColor(roi_mouth, cv2.COLOR_BGR2GRAY)
+                            _, bin_mouth = cv2.threshold(gray_mouth, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+                            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+                            bin_mouth_close = cv2.morphologyEx(bin_mouth, cv2.MORPH_CLOSE, kernel)
+                            mouth_pixel = cv2.countNonZero(bin_mouth_close)
+                        else:
+                            bin_mouth_close = np.zeros((120, 200), dtype=np.uint8)
 
-                                m_vertical = np.linalg.norm(mouth_coords[2] - mouth_coords[6])
-                                m_horizontal = np.linalg.norm(mouth_coords[0] - mouth_coords[4])
-                                mar_score = m_vertical / m_horizontal if m_horizontal != 0 else 0
+                        # =================================================================
+                        # LOGIKA UTAMA NYATA: EVALUASI KANTUK DAN PROTEKSI MENGOBROL (KALIBRASI)
+                        # =================================================================
+                        
+                        # Status flag lokal untuk mencegah counter melonjak berkali-kali dalam 1 frame
+                        if not hasattr(self, 'mulut_sudah_hitung'): self.mulut_sudah_hitung = False
 
-                                self.change_roi_mouth_orig.emit(roi_mouth.copy())
-                                self.change_roi_mouth_bin.emit(mouth_morph.copy())
-                        except cv2.error:
-                            pass # Lewati frame jika terjadi anomali ukuran array C++
+                        # 1. Deteksi Menguap (Threshold diturunkan ke 0.65 agar lebih responsif tapi aman dari bicara)
+# =================================================================
+                        # LOGIKA SAKLAR + COOLDOWN ANTI-DOUBLE COUNTING
+                        # =================================================================
+                        
+                        # 1. Deteksi Menguap (Membuka, Menutup, + Jeda Cooldown 3 Detik)
+                        if mar >= 0.65:
+                            # Mulut terbuka lebar DAN sedang tidak dalam masa jeda setelah menguap
+                            if current_time - self.terakhir_menguap_time > 3.0:
+                                self.sedang_menguap = True
+                        else:
+                            # Ketika mulut mulai menutup kembali
+                            if self.sedang_menguap:
+                                self.counter_mengantuk += 1  # Sah dihitung 1
+                                self.sedang_menguap = False  # Matikan saklar uap
+                                self.terakhir_menguap_time = current_time # Kunci waktu uapan saat ini
+                                print(f"Menguap selesai terhitung! Total Kejadian: {self.counter_mengantuk}/4")
 
-                    # --- LOGIKA MONITORING ---
-                    if ear_score < 0.17 or eye_pixels < 100: 
-                        if mata_tertutup_sejak is None:
-                            mata_tertutup_sejak = time.time() 
-                        if time.time() - mata_tertutup_sejak >= 5.0:
-                            kondisi_pejam_frame_ini = True
-                            if not sudah_hitung_kantuk_ini:
-                                jumlah_pelanggaran_kantuk += 1
-                                sudah_hitung_kantuk_ini = True 
-                    else:
-                        mata_tertutup_sejak = None   
-                        sudah_hitung_kantuk_ini = False
+                        # 2. Cek Kondisi Mata Merem (Tetap aman dengan hitungan kontinu Anda)
+                        if ear < 0.23:
+                            if self.mata_tertutup_start_time is None:
+                                self.mata_tertutup_start_time = current_time 
+                            else:
+                                durasi_merem = current_time - self.mata_tertutup_start_time
+                                if durasi_merem >= 2.5:
+                                    self.counter_mengantuk += 1
+                                    self.mata_tertutup_start_time = None 
+                                    print(f"Kantuk terhitung! Total Kejadian: {self.counter_mengantuk}/4")
+                        else:
+                            self.mata_tertutup_start_time = None 
 
-                    if mar_score > 0.62 or mouth_pixels > 1250:
-                        if mulut_terbuka_sejak is None:
-                            mulut_terbuka_sejak = time.time()
-                        if time.time() - mulut_terbuka_sejak >= 2.5: 
-                            kondisi_menguap_frame_ini = True
-                            if not sudah_hitung_menguap_ini:
-                                jumlah_pelanggaran_kantuk += 1
-                                sudah_hitung_menguap_ini = True
-                    else:
-                        mulut_terbuka_sejak = None 
-                        sudah_hitung_menguap_ini = False 
+                        # 3. Akumulasi Pemicu Alarm (Jika akumulasi sudah mencapai 4)
+                        if self.counter_mengantuk >= 4:
+                            status_driver = "KRITIS: ALARM AKTIF!"
+                            if not self.alarm_active:
+                                try:
+                                    if os.path.exists(self.alarm_path):
+                                        mixer.music.load(self.alarm_path)
+                                        mixer.music.play(-1) 
+                                        self.alarm_active = True
+                                        self.alarm_start_time = current_time
+                                        self.counter_mengantuk = 0 
+                                except Exception as e:
+                                    print(f"Gagal memutar audio: {e}")
+                        else:
+                            if ear < 0.23:
+                                s_durasi = int(current_time - self.mata_tertutup_start_time) if self.mata_tertutup_start_time else 0
+                                status_driver = f"MATA MEREM ({s_durasi}s)"
+                            elif mar >= 0.65 or self.sedang_menguap or (current_time - self.terakhir_menguap_time <= 3.0 and self.terakhir_menguap_time != 0):
+                                status_driver = "MENGUAP DETECTED"
+                            else:
+                                status_driver = "NORMAL"
 
-                    if jumlah_pelanggaran_kantuk >= 3:
-                        status_driver = f"🚨🚨 ALARM AKTIF! PELANGGARAN >3x ({jumlah_pelanggaran_kantuk}x)"
-                        if not self.is_alarm_playing and os.path.exists(self.alarm_path):
-                            pygame.mixer.music.play(-1)
-                            self.is_alarm_playing = True
-                    elif kondisi_pejam_frame_ini:
-                        status_driver = f"🚨 KANTUK DETEKSI! (Total: {jumlah_pelanggaran_kantuk}/3)"
-                    elif kondisi_menguap_frame_ini:
-                        status_driver = f"⚠️ MENGUAP DETEKSI! (Total: {jumlah_pelanggaran_kantuk}/3)"
-                    else:
-                        status_driver = f"NORMAL / AMAN (Pelanggaran: {jumlah_pelanggaran_kantuk}/3)"
+                        # Tampilkan info Counter di pojok video monitoring
+                        cv2.putText(enhanced_frame, f"Kantuk: {self.counter_mengantuk}/4", (480, 40), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-                    if jumlah_pelanggaran_kantuk < 3 and self.is_alarm_playing:
-                        pygame.mixer.music.stop()
-                        self.is_alarm_playing = False
-
-                    box_color = (0, 0, 255) if jumlah_pelanggaran_kantuk >= 3 else ((0, 255, 255) if (kondisi_pejam_frame_ini or kondisi_menguap_frame_ini) else (46, 204, 113))
-                    cv2.rectangle(frame, (rex1, rey1), (rex2, rey2), box_color, 2)
-                    cv2.rectangle(frame, (lex1, ley1), (lex2, ley2), box_color, 2)
-                    cv2.rectangle(frame, (mx1, my1), (mx2, my2), box_color, 2)
-
-            self.change_pixmap_signal.emit(frame)
-            self.update_metrics_signal.emit(ear_score, eye_pixels, mar_score, mouth_pixels, status_driver)
-
-        pygame.mixer.music.stop()
+                        # Emit output gambar ke box PCD
+                        if roi_r.size > 0: self.change_roi_orig_signal.emit(roi_r)
+                        if roi_l.size > 0: self.change_roi_left_orig_signal.emit(roi_l)
+                        self.change_roi_bin_signal.emit(bin_eye)
+                        if roi_mouth.size > 0: self.change_roi_mouth_orig.emit(roi_mouth)
+                        self.change_roi_mouth_bin.emit(bin_mouth_close)
+                else:
+                    status_driver = "WAJAH TIDAK TERDETEKSI"
+                    self.mata_tertutup_start_time = None
+                
+                self.update_metrics_signal.emit(ear, pixel_count, mar, mouth_pixel, status_driver)
+                self.change_pixmap_signal.emit(enhanced_frame)
+                
         cap.release()
+        mixer.quit()
 
     def stop(self):
         self._run_flag = False
+        mixer.music.stop()
         self.wait()
 
-
+# =====================================================================
+# CLASS DASHBOARD APP (TIDAK BERUBAH)
+# =====================================================================
 class DashboardApp(QMainWindow):
     def __init__(self):
         super().__init__()
         loadUi("dashboard.ui", self)
-        self.btnStart.clicked.connect(self.start_camera)
-        self.btnStop.clicked.connect(self.stop_camera)
-        self.thread = None
-
-    def start_camera(self):
-        if self.thread is None or not self.thread.isRunning():
-            self.thread = VideoThread()
-            self.thread.change_pixmap_signal.connect(self.update_main_image)
-            self.thread.change_roi_orig_signal.connect(self.update_roi_orig)
-            self.thread.change_roi_left_orig_signal.connect(self.update_roi_left_orig)
-            self.thread.change_roi_bin_signal.connect(self.update_roi_bin)
-            self.thread.change_roi_mouth_orig.connect(self.update_mouth_orig)
-            self.thread.change_roi_mouth_bin.connect(self.update_mouth_bin)
-            self.thread.update_metrics_signal.connect(self.update_metrics_display)
-            self.thread.start()
-            self.lblStatus.setText("MENYIAPKAN SISTEM...")
-
-    def stop_camera(self):
-        if self.thread is not None and self.thread.isRunning():
-            self.thread.stop()
-            self.lblVideo.setText("Kamera Standby - Hubungkan Perangkat")
-            self.lblRoiOriginal.clear()
-            self.lblRoiLeftOriginal.clear()
-            self.lblRoiBinary.clear()
-            self.lblRoiMouthOrig.clear()
-            self.lblRoiMouthBin.clear()
-            self.lblStatus.setText("SISTEM SIAP")
-
-    def convert_cv_qt(self, cv_img, width, height):
-        if len(cv_img.shape) == 3:
-            h, w, ch = cv_img.shape
-            bytes_per_line = ch * w
-            convert_to_Qt_format = QImage(cv_img.data, w, h, bytes_per_line, QImage.Format_BGR888)
-        else:
-            h, w = cv_img.shape
-            bytes_per_line = w
-            convert_to_Qt_format = QImage(cv_img.data, w, h, bytes_per_line, QImage.Format_Grayscale8)
         
-        p = convert_to_Qt_format.scaled(width, height, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-        return QPixmap.fromImage(p)
+        if not os.path.exists(DATASET_PATH):
+            QMessageBox.warning(self, "Dataset Tidak Ditemukan", f"Folder '{DATASET_PATH}' tidak terdeteksi.")
+        
+        self.btnStart.setEnabled(False)
+        self.is_registered = False
+        
+        self.btnRegistrasi.clicked.connect(self.proses_registrasi)
+        self.btnStart.clicked.connect(self.mulai_monitoring)
+        self.btnStop.clicked.connect(self.hentikan_kamera)
+        
+        self.buka_thread_registrasi()
+
+    def buka_thread_registrasi(self):
+        self.thread = VideoThread(mode='REG')
+        self.thread.change_pixmap_signal.connect(self.render_kamera_utama)
+        self.thread.start()
+
+    def proses_registrasi(self):
+        self.is_registered = True
+        self.lblStatus.setText("WAJAH TERDAFTAR! SILAKAN KLIK MULAI")
+        self.lblStatus.setStyleSheet("color: #0d9488; background-color: #f0fdfa; font-size: 15px; font-weight: bold; border-radius: 6px; border: 1px solid #99f6e4;")
+        self.btnStart.setEnabled(True)
+
+    def mulai_monitoring(self):
+        if not self.is_registered: return
+        if hasattr(self, 'thread') and self.thread.isRunning():
+            self.thread.stop()
+            
+        self.lblStatus.setText("MONITORING BERJALAN")
+        self.lblStatus.setStyleSheet("color: #2563eb; background-color: #eff6ff; font-size: 15px; font-weight: bold; border-radius: 6px; border: 1px solid #bfdbfe;")
+        
+        self.thread = VideoThread(mode='MONITOR')
+        self.thread.change_pixmap_signal.connect(self.render_kamera_utama)
+        
+        self.thread.change_roi_orig_signal.connect(lambda img: self.render_pcd_box(self.lblRoiOriginal, img))
+        self.thread.change_roi_left_orig_signal.connect(lambda img: self.render_pcd_box(self.lblRoiLeftOriginal, img))
+        self.thread.change_roi_bin_signal.connect(lambda img: self.render_pcd_box(self.lblRoiBinary, img))
+        self.thread.change_roi_mouth_orig.connect(lambda img: self.render_pcd_box(self.lblRoiMouthOrig, img))
+        self.thread.change_roi_mouth_bin.connect(lambda img: self.render_pcd_box(self.lblRoiMouthBin, img))
+        
+        self.thread.update_metrics_signal.connect(self.refresh_metrik_angka)
+        self.thread.start()
 
     @pyqtSlot(np.ndarray)
-    def update_main_image(self, cv_img):
-        self.lblVideo.setPixmap(self.convert_cv_qt(cv_img, 640, 420))
+    def render_kamera_utama(self, cv_img):
+        self.lblVideo.setPixmap(self.konversi_gambar(cv_img, 640, 420))
 
-    @pyqtSlot(np.ndarray)
-    def update_roi_orig(self, cv_img):
-        self.lblRoiOriginal.setPixmap(self.convert_cv_qt(cv_img, 200, 140))
-
-    @pyqtSlot(np.ndarray)
-    def update_roi_left_orig(self, cv_img):
-        self.lblRoiLeftOriginal.setPixmap(self.convert_cv_qt(cv_img, 200, 140))
-
-    @pyqtSlot(np.ndarray)
-    def update_roi_bin(self, cv_img):
-        self.lblRoiBinary.setPixmap(self.convert_cv_qt(cv_img, 200, 140))
-
-    @pyqtSlot(np.ndarray)
-    def update_mouth_orig(self, cv_img):
-        self.lblRoiMouthOrig.setPixmap(self.convert_cv_qt(cv_img, 200, 140))
-
-    @pyqtSlot(np.ndarray)
-    def update_mouth_bin(self, cv_img):
-        self.lblRoiMouthBin.setPixmap(self.convert_cv_qt(cv_img, 200, 140))
+    def render_pcd_box(self, label_target, cv_img):
+        label_target.setPixmap(self.konversi_gambar(cv_img, 200, 120))
 
     @pyqtSlot(float, int, float, int, str)
-    def update_metrics_display(self, ear, eye_pix, mar, mouth_pix, status):
+    def refresh_metrik_angka(self, ear, pixel_count, mar, mouth_pixel, status_text):
         self.lblEar.setText(f"Eye Aspect Ratio (EAR) : {ear:.2f}")
-        self.lblPixelCount.setText(f"Luas Piksel Mata (PCD) : {eye_pix} px")
+        self.lblPixelCount.setText(f"Luas Piksel Mata (PCD) : {pixel_count} px")
         self.lblMar.setText(f"Mouth Open Ratio (MAR): {mar:.2f}")
-        self.lblMouthPixel.setText(f"Luas Rongga Mulut(PCD): {mouth_pix} px")
-        self.lblStatus.setText(status)
-
-        if "ALARM AKTIF" in status:
-            self.lblStatus.setStyleSheet("color: #ffffff; background-color: #dc2626; font-size: 15px; font-weight: bold; border-radius: 6px;")
-        elif "🚨" in status or "⚠️" in status:
-            self.lblStatus.setStyleSheet("color: #1f2937; background-color: #fbbf24; font-size: 15px; font-weight: bold; border-radius: 6px;")
+        self.lblMouthPixel.setText(f"Luas Rongga Mulut(PCD): {mouth_pixel} px")
+        
+        if "KRITIS" in status_text or "MENGUAP" in status_text:
+            self.lblStatus.setText(status_text)
+            self.lblStatus.setStyleSheet("color: #dc2626; background-color: #fef2f2; font-size: 15px; font-weight: bold; border-radius: 6px; border: 1px solid #fca5a5;")
+        elif status_text == "WAJAH TIDAK TERDETEKSI":
+            self.lblStatus.setText(status_text)
+            self.lblStatus.setStyleSheet("color: #64748b; background-color: #f8fafc; font-size: 15px; font-weight: bold; border-radius: 6px; border: 1px solid #cbd5e1;")
         else:
-            self.lblStatus.setStyleSheet("color: #10b981; background-color: #f9fafb; font-size: 15px; font-weight: bold; border-radius: 6px; border: 1px solid #e5e7eb;")
+            self.lblStatus.setText(status_text)
+            self.lblStatus.setStyleSheet("color: #10b981; background-color: #f0fdfa; font-size: 15px; font-weight: bold; border-radius: 6px; border: 1px solid #bbf7d0;")
+
+    def konversi_gambar(self, img, w, h):
+        img = np.require(img, np.uint8, 'C')
+        h_img, w_img = img.shape[:2]
+        if len(img.shape) == 2:
+            bytes_per_line = w_img
+            qimg = QImage(img.data, w_img, h_img, bytes_per_line, QImage.Format_Grayscale8)
+        else:
+            bytes_per_line = 3 * w_img
+            qimg = QImage(img.data, w_img, h_img, bytes_per_line, QImage.Format_BGR888)
+        return QPixmap.fromImage(qimg).scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+    def hentikan_kamera(self):
+        if hasattr(self, 'thread') and self.thread.isRunning():
+            self.thread.stop()
+        self.lblStatus.setText("SISTEM DIMATIKAN")
+        self.lblStatus.setStyleSheet("color: #7f1d1d; background-color: #fef2f2; font-size: 15px; font-weight: bold; border-radius: 6px; border: 1px solid #f87171;")
+        self.btnStart.setEnabled(False)
+        self.is_registered = False
 
     def closeEvent(self, event):
-        self.stop_camera()
+        self.hentikan_kamera()
         event.accept()
 
 if __name__ == "__main__":

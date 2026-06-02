@@ -17,6 +17,7 @@
    <string>font-family: 'Segoe UI', Arial, sans-serif; background-color: #f3f4f6;</string>
   </property>
   <widget class="QWidget" name="centralwidget">
+   
    <widget class="QFrame" name="mainFrame">
     <property name="geometry">
      <rect>
@@ -188,6 +189,24 @@
       <string>background-color: #dc2626; color: white; font-weight: bold; font-size: 13px; border-radius: 6px; border: none;</string>
      </property>
     </widget>
+
+    <widget class="QPushButton" name="btnRegistrasi">
+     <property name="geometry">
+      <rect>
+       <x>680</x>
+       <y>360</y>
+       <width>420</width>
+       <height>40</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>REGISTRASI WAJAH AWAL</string>
+     </property>
+     <property name="styleSheet">
+      <string>background-color: #0d9488; color: white; font-weight: bold; font-size: 13px; border-radius: 6px; border: none;</string>
+     </property>
+    </widget>
+
    </widget>
 
    <widget class="QFrame" name="pcdFrame">
@@ -414,6 +433,7 @@
       <string>border: none; font-size: 11px;</string>
      </property>
     </widget>
+
    </widget>
   </widget>
  </widget>
