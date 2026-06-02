@@ -214,7 +214,7 @@
      <rect>
       <x>20</x>
       <y>480</y>
-      <width>1120</width>
+      <width>680</width>
       <height>310</height>
      </rect>
     </property>
@@ -317,49 +317,10 @@
      </property>
     </widget>
 
-    <widget class="QLabel" name="lblRoiBinary">
-     <property name="geometry">
-      <rect>
-       <x>460</x>
-       <y>45</y>
-       <width>200</width>
-       <height>120</height>
-      </rect>
-     </property>
-     <property name="styleSheet">
-      <string>border: 1px solid #cbd5e1; background-color: #f8fafc; border-radius: 6px;</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignCenter</set>
-     </property>
-    </widget>
-    <widget class="QLabel" name="descPcd3">
-     <property name="geometry">
-      <rect>
-       <x>460</x>
-       <y>175</y>
-       <width>200</width>
-       <height>120</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>&lt;b&gt;3. Binerisasi Otsu Mata&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#64748b;&quot;&gt;Konversi Grayscale, Gaussian Blur (3x3), lalu Segmentasi Otsu Threshold secara Inverted (Piksel gelap dibalik jadi Putih).&lt;/span&gt;</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignHCenter|Qt::AlignTop</set>
-     </property>
-     <property name="wordWrap">
-      <bool>true</bool>
-     </property>
-     <property name="styleSheet">
-      <string>border: none; font-size: 11px;</string>
-     </property>
-    </widget>
-
     <widget class="QLabel" name="lblRoiMouthOrig">
      <property name="geometry">
       <rect>
-       <x>680</x>
+       <x>460</x>
        <y>45</y>
        <width>200</width>
        <height>120</height>
@@ -375,53 +336,14 @@
     <widget class="QLabel" name="descPcd4">
      <property name="geometry">
       <rect>
-       <x>680</x>
+       <x>460</x>
        <y>175</y>
        <width>200</width>
        <height>120</height>
       </rect>
      </property>
      <property name="text">
-      <string>&lt;b&gt;4. ROI Mulut&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#64748b;&quot;&gt;Ekstraksi 8 landmark bibir luar-dalam + penambahan Padding luasan 12 piksel untuk mengantisipasi mulut menguap lebar.&lt;/span&gt;</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignHCenter|Qt::AlignTop</set>
-     </property>
-     <property name="wordWrap">
-      <bool>true</bool>
-     </property>
-     <property name="styleSheet">
-      <string>border: none; font-size: 11px;</string>
-     </property>
-    </widget>
-
-    <widget class="QLabel" name="lblRoiMouthBin">
-     <property name="geometry">
-      <rect>
-       <x>900</x>
-       <y>45</y>
-       <width>200</width>
-       <height>120</height>
-      </rect>
-     </property>
-     <property name="styleSheet">
-      <string>border: 1px solid #cbd5e1; background-color: #f8fafc; border-radius: 6px;</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignCenter</set>
-     </property>
-    </widget>
-    <widget class="QLabel" name="descPcd5">
-     <property name="geometry">
-      <rect>
-       <x>900</x>
-       <y>175</y>
-       <width>200</width>
-       <height>120</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>&lt;b&gt;5. Morfologi Mulut&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#64748b;&quot;&gt;Otsu Thresholding dilanjutkan Operasi Morfologi Closing (Kernel 3x3) untuk menghilangkan noise lubang di dalam rongga mulut.&lt;/span&gt;</string>
+      <string>&lt;b&gt;3. ROI Mulut&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:10px; color:#64748b;&quot;&gt;Ekstraksi 8 landmark bibir luar-dalam + penambahan Padding luasan 12 piksel untuk mengantisipasi mulut menguap lebar.&lt;/span&gt;</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignHCenter|Qt::AlignTop</set>

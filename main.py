@@ -17,9 +17,9 @@ class VideoThread(QThread):
     change_pixmap_signal = pyqtSignal(np.ndarray)
     change_roi_orig_signal = pyqtSignal(np.ndarray)
     change_roi_left_orig_signal = pyqtSignal(np.ndarray)
-    change_roi_bin_signal = pyqtSignal(np.ndarray)
+    # change_roi_bin_signal dihapus sesuai permintaan
     change_roi_mouth_orig = pyqtSignal(np.ndarray)
-    change_roi_mouth_bin = pyqtSignal(np.ndarray)
+    # change_roi_mouth_bin dihapus sesuai permintaan
     
     # Isinya: EAR, PixelCount, MAR, MouthPixel, StatusText
     update_metrics_signal = pyqtSignal(float, int, float, int, str)
@@ -49,16 +49,13 @@ class VideoThread(QThread):
         mixer.init()
         self.alarm_path = "alarm.mp3"
 
-        # Variables untuk Logika Counter dan Timer Kustom Anda
-# Variables untuk Logika Counter dan Timer Kustom Anda
-# Variables untuk Logika Counter dan Timer Kustom Anda
         self.counter_mengantuk = 0
         self.mata_tertutup_start_time = None
         self.alarm_active = False
         self.alarm_start_time = None
         
         self.sedang_menguap = False 
-        self.terakhir_menguap_time = 0 # Tambahkan ini untuk mengunci jeda waktu uapan
+        self.terakhir_menguap_time = 0 # Mengunci jeda waktu uapan
 
     def run(self):
         cap = cv2.VideoCapture(1)
@@ -144,14 +141,12 @@ class VideoThread(QThread):
                         y_pts_m = [p[1] for p in mulut_titik]
                         roi_mouth = enhanced_frame[max(0, min(y_pts_m)-12):min(h_f, max(y_pts_m)+12), max(0, min(x_pts_m)-12):min(w_f, max(x_pts_m)+12)]
 
-                        # --- SEGMENTASI CITRA REAL-TIME ---
+                        # --- SEGMENTASI CITRA REAL-TIME (Kalkulasi Background Tetap Jalan Aktif) ---
                         if roi_r.size > 0:
                             gray_eye = cv2.cvtColor(roi_r, cv2.COLOR_BGR2GRAY)
                             blur_eye = cv2.GaussianBlur(gray_eye, (3, 3), 0)
                             _, bin_eye = cv2.threshold(blur_eye, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
                             pixel_count = cv2.countNonZero(bin_eye)
-                        else:
-                            bin_eye = np.zeros((120, 200), dtype=np.uint8)
 
                         if roi_mouth.size > 0:
                             gray_mouth = cv2.cvtColor(roi_mouth, cv2.COLOR_BGR2GRAY)
@@ -159,35 +154,24 @@ class VideoThread(QThread):
                             kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
                             bin_mouth_close = cv2.morphologyEx(bin_mouth, cv2.MORPH_CLOSE, kernel)
                             mouth_pixel = cv2.countNonZero(bin_mouth_close)
-                        else:
-                            bin_mouth_close = np.zeros((120, 200), dtype=np.uint8)
 
                         # =================================================================
-                        # LOGIKA UTAMA NYATA: EVALUASI KANTUK DAN PROTEKSI MENGOBROL (KALIBRASI)
-                        # =================================================================
-                        
-                        # Status flag lokal untuk mencegah counter melonjak berkali-kali dalam 1 frame
-                        if not hasattr(self, 'mulut_sudah_hitung'): self.mulut_sudah_hitung = False
-
-                        # 1. Deteksi Menguap (Threshold diturunkan ke 0.65 agar lebih responsif tapi aman dari bicara)
-# =================================================================
                         # LOGIKA SAKLAR + COOLDOWN ANTI-DOUBLE COUNTING
                         # =================================================================
-                        
+                        if not hasattr(self, 'mulut_sudah_hitung'): self.mulut_sudah_hitung = False
+
                         # 1. Deteksi Menguap (Membuka, Menutup, + Jeda Cooldown 3 Detik)
                         if mar >= 0.65:
-                            # Mulut terbuka lebar DAN sedang tidak dalam masa jeda setelah menguap
                             if current_time - self.terakhir_menguap_time > 3.0:
                                 self.sedang_menguap = True
                         else:
-                            # Ketika mulut mulai menutup kembali
                             if self.sedang_menguap:
-                                self.counter_mengantuk += 1  # Sah dihitung 1
-                                self.sedang_menguap = False  # Matikan saklar uap
-                                self.terakhir_menguap_time = current_time # Kunci waktu uapan saat ini
+                                self.counter_mengantuk += 1  
+                                self.sedang_menguap = False  
+                                self.terakhir_menguap_time = current_time 
                                 print(f"Menguap selesai terhitung! Total Kejadian: {self.counter_mengantuk}/4")
 
-                        # 2. Cek Kondisi Mata Merem (Tetap aman dengan hitungan kontinu Anda)
+                        # 2. Cek Kondisi Mata Merem
                         if ear < 0.23:
                             if self.mata_tertutup_start_time is None:
                                 self.mata_tertutup_start_time = current_time 
@@ -200,9 +184,15 @@ class VideoThread(QThread):
                         else:
                             self.mata_tertutup_start_time = None 
 
-                        # 3. Akumulasi Pemicu Alarm (Jika akumulasi sudah mencapai 4)
+                        # =================================================================
+                        # 3. Akumulasi Pemicu Alarm (PENGUNCI 4/4 DAN RESET OTOMATIS SINKRON)
+                        # =================================================================
                         if self.counter_mengantuk >= 4:
+                            self.counter_mengantuk = 4
+                            
+                        if self.counter_mengantuk == 4 or self.alarm_active:
                             status_driver = "KRITIS: ALARM AKTIF!"
+                            
                             if not self.alarm_active:
                                 try:
                                     if os.path.exists(self.alarm_path):
@@ -210,9 +200,16 @@ class VideoThread(QThread):
                                         mixer.music.play(-1) 
                                         self.alarm_active = True
                                         self.alarm_start_time = current_time
-                                        self.counter_mengantuk = 0 
                                 except Exception as e:
                                     print(f"Gagal memutar audio: {e}")
+                                    
+                            if self.alarm_active and (current_time - self.alarm_start_time >= 10.0):
+                                mixer.music.stop()         
+                                self.alarm_active = False 
+                                self.alarm_start_time = None
+                                self.counter_mengantuk = 0 
+                                print("Alarm selesai berbunyi 10 detik. Counter otomatis kembali ke 0.")
+                                
                         else:
                             if ear < 0.23:
                                 s_durasi = int(current_time - self.mata_tertutup_start_time) if self.mata_tertutup_start_time else 0
@@ -220,18 +217,17 @@ class VideoThread(QThread):
                             elif mar >= 0.65 or self.sedang_menguap or (current_time - self.terakhir_menguap_time <= 3.0 and self.terakhir_menguap_time != 0):
                                 status_driver = "MENGUAP DETECTED"
                             else:
-                                status_driver = "NORMAL"
+                                status_driver = "NORMAL"    
 
                         # Tampilkan info Counter di pojok video monitoring
                         cv2.putText(enhanced_frame, f"Kantuk: {self.counter_mengantuk}/4", (480, 40), 
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-                        # Emit output gambar ke box PCD
+                        # Emit output gambar ke box PCD (Hanya mengirim gambar ROI Asli)
                         if roi_r.size > 0: self.change_roi_orig_signal.emit(roi_r)
                         if roi_l.size > 0: self.change_roi_left_orig_signal.emit(roi_l)
-                        self.change_roi_bin_signal.emit(bin_eye)
                         if roi_mouth.size > 0: self.change_roi_mouth_orig.emit(roi_mouth)
-                        self.change_roi_mouth_bin.emit(bin_mouth_close)
+                        # Emit binerisasi dan morfologi telah dihapus dari antrean pipeline
                 else:
                     status_driver = "WAJAH TIDAK TERDETEKSI"
                     self.mata_tertutup_start_time = None
@@ -247,8 +243,9 @@ class VideoThread(QThread):
         mixer.music.stop()
         self.wait()
 
+
 # =====================================================================
-# CLASS DASHBOARD APP (TIDAK BERUBAH)
+# CLASS DASHBOARD APP (DIBERSIHKAN DARI KONEKSI BINER)
 # =====================================================================
 class DashboardApp(QMainWindow):
     def __init__(self):
@@ -289,11 +286,12 @@ class DashboardApp(QMainWindow):
         self.thread = VideoThread(mode='MONITOR')
         self.thread.change_pixmap_signal.connect(self.render_kamera_utama)
         
+        # Menghubungkan komponen ROI Asli ke UI
         self.thread.change_roi_orig_signal.connect(lambda img: self.render_pcd_box(self.lblRoiOriginal, img))
         self.thread.change_roi_left_orig_signal.connect(lambda img: self.render_pcd_box(self.lblRoiLeftOriginal, img))
-        self.thread.change_roi_bin_signal.connect(lambda img: self.render_pcd_box(self.lblRoiBinary, img))
         self.thread.change_roi_mouth_orig.connect(lambda img: self.render_pcd_box(self.lblRoiMouthOrig, img))
-        self.thread.change_roi_mouth_bin.connect(lambda img: self.render_pcd_box(self.lblRoiMouthBin, img))
+        
+        # Pengikatan ke self.lblRoiBinary dan self.lblRoiMouthBin telah dihapus sepenuhnya
         
         self.thread.update_metrics_signal.connect(self.refresh_metrik_angka)
         self.thread.start()
